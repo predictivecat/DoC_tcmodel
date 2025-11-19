@@ -1,0 +1,47 @@
+function handles = parisliegefig(subpl, liegehc,liegemcs,liegeuws,parishc,parismcs,parisuws)
+
+
+% Colors to be used (4 for now, can add more)
+g=[0.4660 0.6740 0.1880]; % Green
+y=[0.9290 0.6940 0.1250]; % Yellow
+r=[0.6350 0.0780 0.1840]; % Red
+colorVector = [g; y; r; g; y; r];
+alphaBackground = [0.3;0.3;0.3;0.3;0.3;0.3];
+alpha = [0.5;0.5;0.5;0.5;0.5;0.5];
+% Create group and value vector for plot
+group = [ones(1,size(liegehc,2)),2*ones(1,size(liegemcs,2)),3*ones(1,size(liegeuws,2)),...
+4,5*ones(1,size(parishc,2)),6*ones(1,size(parismcs,2)),7*ones(1,size(parisuws,2))];
+
+values = [liegehc,liegemcs,liegeuws,NaN,parishc,parismcs,parisuws];
+
+%figure('rend','painters','pos',[10 10 800 276])
+subplot(3,3,subpl);
+hold on
+distributionPlot(values.','groups', group,'Color', [0.8 0.8 0.8],'addBoxes',1,'showMM',0,'addSpread',0)
+
+
+% Color the violin plots.
+h = findobj(gca,'Type','Patch');
+for j=1:length(h)
+    patch(get(h(j),'XData'),get(h(j),'YData'),colorVector(j,:),'FaceAlpha',alphaBackground(j),'EdgeColor','none');
+end
+
+h = findobj(gca,'Tag','Box');
+for j=1:length(h)
+    if j >3
+        jdex = j-1;
+    else
+        jdex = j;
+    end
+    patch(get(h(j),'XData'),get(h(j),'YData'),colorVector(jdex,:),'FaceAlpha',alpha(jdex));
+end
+
+
+c = get(gca, 'Children');
+set(gca,'xtick',[2,6])
+set(gca,'xticklabel',{'Liege','Paris'})
+set(gca,'fontsize',14)
+% hleg1 = legend(c(1:3), {'HC','MCS','UWS'}, 'Location','Best');
+% legend('boxoff')
+end
+

@@ -1,0 +1,177 @@
+function [pValues,pValuesCorrected] = displayDistributionPlots(options,varargin)
+% Displays colored violin plots and simple between group comparisons for
+% each frequency band. Example: displayDistributionPlots(options,measure_rest,measure_parox,measure_seiz);
+%
+%       Input:
+%               - options: structure with the names of the bands, the names of the groups, the name of
+%               measure to display, and the type of statistical comparison to perform (matched = 1, non-matched = 2)
+%
+%               EXAMPLE:
+%               options.bandNames = {'Theta','Alpha','Beta-1','Beta-2'};
+%               options.groupNames = {'Resting state', 'Visuo-tactile ON', 'Out of body experience'};
+%               options.measureName = measure;
+%               options.comparisonType = 1;
+%
+%               - varargin: N x B matrices with the values to display, where N is the number of subjects 
+%               B the number of bands (HAS TO BE THE SAME LENGTH AS THE
+%               CELL WITH THE NAMES OF THE BANDS)
+%
+%       Output:
+%               - pValues: 1 x B vector with the p-values for the
+%               statistical comparison for the interactions between the M
+%               groups
+%               - pValuesCorrected: FDR corrected p-values for the number of bands
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+bandNames = options.bandNames;
+measureName = options.measureName;
+groupNames = options.groupNames;
+comparisonType = options.comparisonType;
+normalize = options.normalize;
+
+% Colors to be used (4 for now, can add more)
+g=fliplr([0.4660 0.6740 0.1880]); % Green
+y=fliplr([0.9290 0.6940 0.1250]); % Yellow
+r=fliplr([0.6350 0.0780 0.1840]); % Red
+p=fliplr([0.4940, 0.1840, 0.5560]); % Purple
+b=fliplr([0, 0.4470, 0.7410]); % Blue
+
+w=fliplr([1 1 1]);
+
+nGroups = size(varargin,2);
+nBands = size(varargin{1},2);
+
+if size(bandNames,2) ~= nBands
+    fprintf('The number of bands does not match the length of the names of the bands');
+    return
+end
+
+switch nGroups
+    case 1
+        colorVector = g;
+    case 2
+        colorVector = [y; g];
+    case 3
+        colorVector = [g; y; r];
+    case 4
+        colorVector = [y; p; r; g];
+    case 5
+        colorVector = [y; p; b; r; g];
+    otherwise
+        fprintf('Too many groups. You need to add more colors');
+        return
+end
+
+% Define group and measure vectors for display purposes
+group = [];
+values = [];
+color = [];
+colorBackground = [];
+counter = 1;
+
+for bandN = 1: nBands
+    nSubjects = 0;
+    for groupN = 1:nGroups
+        % Build group vector
+        if groupN == nGroups && bandN ~= nBands
+            extraGroup = counter + 1;
+            extraValue = NaN;
+        else
+            extraGroup = [];
+            extraValue = [];
+        end
+        group = [group counter*ones(1,size(varargin{groupN},1)) extraGroup];
+        nSubjects = nSubjects + size(varargin{groupN},1);
+        % Build measure vector
+        tempMeasure = varargin{groupN};
+        values = [values squeeze(tempMeasure(:,bandN)).' extraValue];
+        
+        if groupN == nGroups && bandN ~= nBands
+            counter = counter + 2;
+        else
+            counter = counter + 1;
+        end
+    end
+    % Build color vector
+    if bandN ~= nBands
+        color = [color; colorVector; w;];
+        colorBackground = [colorBackground; colorVector;];
+    else
+        color = [color; colorVector;];
+        colorBackground = [colorBackground; colorVector;];
+    end
+end
+
+color = flipud(fliplr(color));
+colorBackground = flipud(fliplr(colorBackground));
+
+% Build alpha vector
+alpha = 0.5*ones(1,nBands*nGroups + (nBands-1));
+alphaBackground = 0.3*ones(1,nBands*nGroups + (nBands-1));
+
+figure('rend','painters','pos',[10 10 800 276])
+hold on
+distributionPlot(values.','groups', group,'Color', [0.8 0.8 0.8],'addBoxes',1,'showMM',0,'addSpread',0)
+
+% Color the violin plots.
+h = findobj(gca,'Type','Patch');
+
+for j=1:length(h)
+    patch(get(h(j),'XData'),get(h(j),'YData'),colorBackground(j,:),'FaceAlpha',alphaBackground(j),'EdgeColor','none');
+end
+
+h = findobj(gca,'Tag','Box');
+for j=1:length(h)
+    patch(get(h(j),'XData'),get(h(j),'YData'),color(j,:),'FaceAlpha',alpha(j));
+end
+
+initialPosition = (nGroups + 1)/2;
+finalPosition = (nGroups +1) * (nBands);
+stepSize = nGroups+1;
+
+set(gca,'xtick',initialPosition:stepSize:finalPosition)
+set(gca,'xticklabel',bandNames)
+set(gca,'fontsize',12)
+
+ylabel(measureName)
+
+c = get(gca, 'Children');
+
+if normalize == 1
+    % Draw a line at 1
+    line(0:nBands*nGroups + (nBands),ones(1,nBands*nGroups + (nBands+1)),'Color','red')
+end
+
+hleg1 = legend(c(1:nGroups), groupNames, 'Location','Best');
+legend('boxoff')
+
+for bandN=1:nBands
+    measureGroups = [];
+    for groupN = 1:nGroups
+        tempMeasure = varargin{groupN};
+        measureGroups = [measureGroups, tempMeasure(:,bandN).'];
+        
+    end
+    switch comparisonType
+        case 1 % Same group different conditions
+            if groupN == 2
+                [pValues(bandN)] = signrank(measureGroups,1); 
+            else
+                [pValues(bandN)] = friedman(measureGroups,1);
+            end
+        case 2 % Different groups
+            groupComparisons = [];
+            for counter = 1:size(varargin,2)
+                tempMeasure = varargin{counter};
+                groupComparisons = [groupComparisons counter*ones(1,size(tempMeasure,1))];
+            end
+            
+            [pValues(bandN) ~] = kruskalwallis(measureGroups,groupComparisons,'off');
+    end
+end
+
+[pValuesCorrected]=mafdr(pValues,'BHFDR',true);
+
+end
+
